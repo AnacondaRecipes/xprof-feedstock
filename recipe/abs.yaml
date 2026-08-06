@@ -2,4 +2,4 @@
 # gviz-api-feedstock PR staging channel (AnacondaRecipes/gviz-api-feedstock#1).
 # REMOVE this file before merge, once gviz-api is released to pkgs/main.
 channels:
-  - https://staging.continuum.io/pbp/fs/gviz-api-feedstock/pr1/f80ee694099490372a45a3a80903a104ad669c31
+  - https://staging.continuum.io/pbp/fs/gviz-api-feedstock/pr1/f80ee69
