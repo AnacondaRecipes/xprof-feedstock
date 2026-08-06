@@ -1,0 +1,83 @@
+{% set name = "xprof" %}
+{% set version = "2.23.1" %}
+# upstream publishes no sdist; per-platform wheels bundle the Bazel-built native
+# trace-processing library (profiler_plugin_c_api) and the prebuilt web frontend,
+# so this recipe repacks the official PyPI wheels (same approach as tensorboard)
+{% set wheel_tag = "manylinux_2_27_x86_64" %}      # [linux64]
+{% set wheel_sha = "96701f868b7a736a789d0a4b5efeeb269feaed63348117707e853a72e006c722" %}  # [linux64]
+{% set wheel_tag = "manylinux_2_35_aarch64" %}     # [aarch64]
+{% set wheel_sha = "5a0daf97fc328e2bee9ddd89b6cd7d3cd1966938428a4df6a496926f05a35836" %}  # [aarch64]
+{% set wheel_tag = "macosx_11_0_arm64" %}          # [osx and arm64]
+{% set wheel_sha = "ad7727676b1808eb4b92fd87b121b4661ea25d30e9542339ab867843354e2253" %}  # [osx and arm64]
+{% set wheel_tag = "win_amd64" %}                  # [win64]
+{% set wheel_sha = "e56b7e7940f903f3ef27aa113b8b491c859f161fc55815541a58e54ecd0ca4d8" %}  # [win64]
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.org/packages/py3/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}-py3-none-{{ wheel_tag }}.whl
+  sha256: {{ wheel_sha }}
+
+build:
+  number: 0
+  # upstream requires-python >=3.10; wheels published for linux-64, linux-aarch64,
+  # osx-arm64 and win-64 only (no osx-64 wheel upstream)
+  skip: true  # [py<310 or (osx and x86_64)]
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed --no-build-isolation {{ name }}-{{ version }}-py3-none-{{ wheel_tag }}.whl
+  entry_points:
+    - xprof = xprof.cli.xprof_cli:main
+
+requirements:
+  host:
+    - python
+    - pip
+  run:
+    - python
+    # wheel platform tags: manylinux_2_27 (x86_64) / manylinux_2_35 (aarch64)
+    - __glibc >=2.27  # [linux64]
+    - __glibc >=2.35  # [aarch64]
+    - absl-py >=2.1.0
+    - gviz-api >=1.9.0
+    - protobuf >=3.19.6
+    - setuptools >=41.0.0
+    - six >=1.10.0
+    - werkzeug >=0.11.15
+    - etils >=1.0.0
+    # etils[epath] extra expands to:
+    - fsspec >=2024.3.1
+    - typing_extensions
+    - zipp
+    - cheroot >=10.0.1
+    - gcsfs >=2024.3.1
+    - google-cloud-storage >=3.12.0
+    - urllib3 >=2.7.0
+    - fire >=0.4.0
+
+test:
+  requires:
+    - pip
+  imports:
+    - xprof
+    # loads the bundled native trace-processing library
+    - xprof.convert._pywrap_profiler_plugin
+  commands:
+    - pip check
+    - xprof --help
+
+about:
+  home: https://github.com/openxla/xprof
+  license: Apache-2.0
+  license_family: Apache
+  # wheels ship no license file; recipe/LICENSE is the upstream repo's LICENSE at the release tag
+  license_file: LICENSE
+  summary: XProf Profiler Plugin
+  description: |
+    XProf (formerly the TensorBoard profile plugin) offers a suite of tools
+    for understanding and optimizing the performance of machine learning
+    workloads on CPUs, GPUs and TPUs. It analyzes profiles captured from
+    JAX, TensorFlow and PyTorch/XLA, and can run standalone via the xprof
+    CLI or as a TensorBoard plugin.
+  doc_url: https://openxla.org/xprof
+  dev_url: https://github.com/openxla/xprof
