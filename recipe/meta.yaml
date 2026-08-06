@@ -30,6 +30,14 @@ build:
     - xprof = xprof.cli.xprof_cli:main
 
 requirements:
+  build:
+    # binary repackaging: the stdlib sysroot resolves the prebuilt
+    # profiler_plugin_c_api.so's glibc-family DSO links, and the compilers'
+    # run_exports supply the libstdcxx/libgcc run deps it links against
+    # (same pattern as cuda-tileiras-feedstock)
+    - {{ compiler('c') }}    # [linux64]
+    - {{ compiler('cxx') }}  # [linux64]
+    - {{ stdlib('c') }}      # [linux64]
   host:
     - python
     - pip
@@ -48,6 +56,9 @@ requirements:
     - fsspec >=2024.3.1
     - typing_extensions
     - zipp
+    # etils <1.13 (the last py3.10-compatible series on pkgs/main) additionally
+    # requires importlib_resources in its epath extra
+    - importlib_resources  # [py<311]
     - cheroot >=10.0.1
     - gcsfs >=2024.3.1
     - google-cloud-storage >=3.12.0
