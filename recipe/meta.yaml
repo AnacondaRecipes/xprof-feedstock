@@ -5,8 +5,6 @@
 # so this recipe repacks the official PyPI wheels (same approach as tensorboard)
 {% set wheel_tag = "manylinux_2_27_x86_64" %}      # [linux64]
 {% set wheel_sha = "96701f868b7a736a789d0a4b5efeeb269feaed63348117707e853a72e006c722" %}  # [linux64]
-{% set wheel_tag = "manylinux_2_35_aarch64" %}     # [aarch64]
-{% set wheel_sha = "5a0daf97fc328e2bee9ddd89b6cd7d3cd1966938428a4df6a496926f05a35836" %}  # [aarch64]
 {% set wheel_tag = "macosx_11_0_arm64" %}          # [osx and arm64]
 {% set wheel_sha = "ad7727676b1808eb4b92fd87b121b4661ea25d30e9542339ab867843354e2253" %}  # [osx and arm64]
 {% set wheel_tag = "win_amd64" %}                  # [win64]
@@ -22,9 +20,11 @@ source:
 
 build:
   number: 0
-  # upstream requires-python >=3.10; wheels published for linux-64, linux-aarch64,
-  # osx-arm64 and win-64 only (no osx-64 wheel upstream)
-  skip: true  # [py<310 or (osx and x86_64)]
+  # upstream requires-python >=3.10; no osx-64 wheel upstream.
+  # linux-aarch64 skipped: upstream's aarch64 wheel is manylinux_2_35 (glibc >=2.35),
+  # PBP aarch64 workers run glibc 2.28 — pip rejects the wheel and the package
+  # could not be installed or tested there (same baseline blocker as PKG-13219)
+  skip: true  # [py<310 or (osx and x86_64) or aarch64]
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed --no-build-isolation {{ name }}-{{ version }}-py3-none-{{ wheel_tag }}.whl
   entry_points:
     - xprof = xprof.cli.xprof_cli:main
@@ -35,9 +35,8 @@ requirements:
     - pip
   run:
     - python
-    # wheel platform tags: manylinux_2_27 (x86_64) / manylinux_2_35 (aarch64)
+    # wheel platform tag: manylinux_2_27 (x86_64)
     - __glibc >=2.27  # [linux64]
-    - __glibc >=2.35  # [aarch64]
     - absl-py >=2.1.0
     - gviz-api >=1.9.0
     - protobuf >=3.19.6
@@ -81,3 +80,9 @@ about:
     CLI or as a TensorBoard plugin.
   doc_url: https://openxla.org/xprof
   dev_url: https://github.com/openxla/xprof
+
+extra:
+  skip-lints:
+    # setuptools >=41.0.0 is a declared upstream runtime requirement
+    # (install_requires in plugin/setup.py); it belongs in run, not host
+    - python_build_tools_in_host
