@@ -34,6 +34,20 @@ export LD_LIBRARY_PATH="${BUILD_PREFIX}/lib:${PREFIX}/lib${LD_LIBRARY_PATH:+:$LD
 
 mkdir -p "${SRC_DIR}/bazel_output_base"
 
+# conda bazel's extracted helper binaries (process-wrapper, linux-sandbox, ...)
+# carry an $ORIGIN-relative RPATH that breaks after extraction, so they cannot
+# load the env's libprotobuf. Env plumbing cannot fix rules that declare their
+# own action env (rules_nodejs rollup does), so repair the RPATH in place.
+bazel --output_user_root="${SRC_DIR}/bazel_output_base" version 1>&2
+INSTALL_BASE=$(bazel --output_user_root="${SRC_DIR}/bazel_output_base" info install_base)
+{ echo "=== DEBUG: install_base=$INSTALL_BASE"; ls "$INSTALL_BASE" | head -30; } 1>&2
+for b in process-wrapper linux-sandbox build-runfiles daemonize; do
+  if [ -f "$INSTALL_BASE/$b" ]; then
+    { echo "=== DEBUG: $b linkage BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH|NEEDED' || true; } 1>&2
+    patchelf --set-rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "patchelf failed on $b" 1>&2
+  fi
+done
+
 # Upstream's README suggests `--config=public_cache` (Google's public remote
 # build cache). Deliberately NOT used: every action is compiled locally so the
 # shipped binaries are attested-from-source — the entire point of this recipe.
