@@ -25,13 +25,13 @@ index 2bac6ae..1e98f82 100644
  load("@rules_nodejs//nodejs:repositories.bzl", "nodejs_register_toolchains")
 diff --git a/third_party/rules_nodejs_os_name.patch b/third_party/rules_nodejs_os_name.patch
 new file mode 100644
-index 0000000..e066d23
+index 0000000..5547e77
 --- /dev/null
 +++ b/third_party/rules_nodejs_os_name.patch
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,18 @@
 +--- a/nodejs/private/os_name.bzl	2026-09-11 10:59:13.449503774 -0500
-++++ b/nodejs/private/os_name.bzl	2026-09-11 10:59:13.476794174 -0500
-+@@ -43,8 +43,10 @@
+++++ b/nodejs/private/os_name.bzl	2026-09-11 12:43:20.884478610 -0500
++@@ -43,8 +43,13 @@
 +     if os_name.find("windows") != -1:
 +         return OS_NAMES[0]
 + 
@@ -41,6 +41,9 @@ index 0000000..e066d23
 ++    # use the JVM-reported arch, normalized to uname spelling.
 ++    arch = rctx.os.arch
 ++    arch = "x86_64" if arch == "amd64" else arch
+++    # JVM reports Apple Silicon as "aarch64"; this file expects "arm64" on mac
+++    if os_name.startswith("mac os") and arch == "aarch64":
+++        arch = "arm64"
 +     if os_name.startswith("mac os"):
 +         if arch == "x86_64":
 +             return OS_NAMES[1]
