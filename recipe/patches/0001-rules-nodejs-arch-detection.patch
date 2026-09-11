@@ -1,0 +1,46 @@
+From: Xianglong Kong <xkong@anaconda.com>
+Subject: Use rctx.os.arch in rules_nodejs os_name (packaging patch)
+
+rules_nodejs 5.8.5 detects the host architecture by shelling out to
+`uname -m` inside a repository rule; on PBP CI workers that subprocess
+returns empty stdout, failing the npm repository fetch with
+"Unsupported operating system linux architecture ". Patch the external
+archive (via http_archive's native `patches` attribute, which does not
+spawn subprocesses) to use Bazel's built-in rctx.os.arch instead,
+normalized to uname spelling. Packaging-only; not upstreamable as-is.
+Co-authored-by: Claude (AI assistant)
+
+diff --git a/WORKSPACE b/WORKSPACE
+index 2bac6ae..1e98f82 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -273,6 +273,8 @@ http_archive(
+     name = "rules_nodejs",
+     sha256 = "0c2277164b1752bb71ecfba3107f01c6a8fb02e4835a790914c71dfadcf646ba",
+     urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/5.8.5/rules_nodejs-core-5.8.5.tar.gz"],
++    patches = ["//third_party:rules_nodejs_os_name.patch"],
++    patch_args = ["-p1"],
+ )
+ 
+ load("@rules_nodejs//nodejs:repositories.bzl", "nodejs_register_toolchains")
+diff --git a/third_party/rules_nodejs_os_name.patch b/third_party/rules_nodejs_os_name.patch
+new file mode 100644
+index 0000000..e066d23
+--- /dev/null
++++ b/third_party/rules_nodejs_os_name.patch
+@@ -0,0 +1,15 @@
++--- a/nodejs/private/os_name.bzl	2026-09-11 10:59:13.449503774 -0500
+++++ b/nodejs/private/os_name.bzl	2026-09-11 10:59:13.476794174 -0500
++@@ -43,8 +43,10 @@
++     if os_name.find("windows") != -1:
++         return OS_NAMES[0]
++ 
++-    # This is not ideal, but bazel doesn't directly expose arch.
++-    arch = rctx.execute(["uname", "-m"]).stdout.strip()
+++    # Anaconda: rctx.execute(["uname","-m"]) returns empty on PBP CI workers;
+++    # use the JVM-reported arch, normalized to uname spelling.
+++    arch = rctx.os.arch
+++    arch = "x86_64" if arch == "amd64" else arch
++     if os_name.startswith("mac os"):
++         if arch == "x86_64":
++             return OS_NAMES[1]
