@@ -42,7 +42,7 @@ bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   --repo_env=HERMETIC_PYTHON_VERSION=${PY_VER} \
   //plugin:build_pip_package -- --output "${SRC_DIR}/pip_pkg_out"
 
-# DEBUG (bring-up only): show what the build produced before pip install
+# DEBUG (bring-up only): show what the build produced before installing
 { echo "=== DEBUG: pip_pkg_out contents ==="; find "${SRC_DIR}/pip_pkg_out" -maxdepth 3 | head -60; } 1>&2
 
 # build_pip_package assembles the package tree (setup.py, python sources,
