@@ -35,36 +35,44 @@ export LD_LIBRARY_PATH="${BUILD_PREFIX}/lib:${PREFIX}/lib${LD_LIBRARY_PATH:+:$LD
 mkdir -p "${SRC_DIR}/bazel_output_base"
 
 # conda bazel's extracted helper binaries (process-wrapper, linux-sandbox, ...)
-# carry an $ORIGIN-relative RPATH that breaks after extraction, so they cannot
-# load the env's libprotobuf. Env plumbing cannot fix rules that declare their
-# own action env (rules_nodejs rollup does), so repair the RPATH in place.
+# carry a leaked, unrelocated build-prefix RPATH (bazel-feedstock bug), so they
+# cannot load the env's libprotobuf. Env plumbing cannot fix rules that declare
+# their own action env (rules_nodejs rollup does), so repair the RPATH in
+# place. Linux-only: the repair is ELF-specific; revisit for Mach-O if the
+# osx-arm64 lane shows the same loader failure.
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" version 1>&2
 INSTALL_BASE=$(bazel --output_user_root="${SRC_DIR}/bazel_output_base" info install_base)
 { echo "=== DEBUG: install_base=$INSTALL_BASE"; ls "$INSTALL_BASE" | head -30; } 1>&2
-for b in process-wrapper linux-sandbox build-runfiles daemonize; do
-  if [ -f "$INSTALL_BASE/$b" ]; then
-    { echo "=== DEBUG: $b RPATH BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH' || true; } 1>&2
-    # bazel validates its install base by comparing the far-future mtimes it
-    # stamps at extraction; preserve and restore them or startup FATALs with
-    # "corrupt installation: file ... missing or modified"
-    touch -r "$INSTALL_BASE/$b" "${SRC_DIR}/.mtime_ref_$b"
-    patchelf --set-rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "patchelf failed on $b" 1>&2
-    touch -r "${SRC_DIR}/.mtime_ref_$b" "$INSTALL_BASE/$b"
-  fi
-done
+if [[ "$(uname)" == "Linux" ]]; then
+  for b in process-wrapper linux-sandbox build-runfiles daemonize; do
+    if [ -f "$INSTALL_BASE/$b" ]; then
+      { echo "=== DEBUG: $b RPATH BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH' || true; } 1>&2
+      # bazel validates its install base by comparing the far-future mtimes it
+      # stamps at extraction; preserve and restore them or startup FATALs with
+      # "corrupt installation: file ... missing or modified"
+      touch -r "$INSTALL_BASE/$b" "${SRC_DIR}/.mtime_ref_$b"
+      patchelf --set-rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "patchelf failed on $b" 1>&2
+      touch -r "${SRC_DIR}/.mtime_ref_$b" "$INSTALL_BASE/$b"
+    fi
+  done
+fi
 
 # Upstream's README suggests `--config=public_cache` (Google's public remote
 # build cache). Deliberately NOT used: every action is compiled locally so the
 # shipped binaries are attested-from-source — the entire point of this recipe.
 # --repo_env=PATH: propagate PATH into repository rules so rules_nodejs's
 # `uname -m` probe resolves (it returned empty on PBP without it).
+# HERMETIC_PYTHON_VERSION is pinned to 3.12 for ALL variants: it only selects
+# bazel's internal interpreter + upstream's requirements_lock (shipped for
+# 3.10-3.13 only); the assembled package is python-version-independent
+# (upstream tags it py3-none) and our ${PYTHON} performs the real install.
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   run \
   --verbose_failures \
   --announce_rc \
   --jobs=${CPU_COUNT} \
   --repo_env=PATH \
-  --repo_env=HERMETIC_PYTHON_VERSION=${PY_VER} \
+  --repo_env=HERMETIC_PYTHON_VERSION=3.12 \
   --action_env=LD_LIBRARY_PATH \
   --host_action_env=LD_LIBRARY_PATH \
   //plugin:build_pip_package -- --output "${SRC_DIR}/pip_pkg_out"
