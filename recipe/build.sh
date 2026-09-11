@@ -43,8 +43,13 @@ INSTALL_BASE=$(bazel --output_user_root="${SRC_DIR}/bazel_output_base" info inst
 { echo "=== DEBUG: install_base=$INSTALL_BASE"; ls "$INSTALL_BASE" | head -30; } 1>&2
 for b in process-wrapper linux-sandbox build-runfiles daemonize; do
   if [ -f "$INSTALL_BASE/$b" ]; then
-    { echo "=== DEBUG: $b linkage BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH|NEEDED' || true; } 1>&2
+    { echo "=== DEBUG: $b RPATH BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH' || true; } 1>&2
+    # bazel validates its install base by comparing the far-future mtimes it
+    # stamps at extraction; preserve and restore them or startup FATALs with
+    # "corrupt installation: file ... missing or modified"
+    touch -r "$INSTALL_BASE/$b" "${SRC_DIR}/.mtime_ref_$b"
     patchelf --set-rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "patchelf failed on $b" 1>&2
+    touch -r "${SRC_DIR}/.mtime_ref_$b" "$INSTALL_BASE/$b"
   fi
 done
 
