@@ -15,7 +15,7 @@ source gen-bazel-toolchain
   for t in uname bazel gcc cc node python git curl; do
     echo "  $t -> $(command -v $t || echo MISSING)"
   done
-  bazel --version || true
+  bazel version || true
   echo "=== DEBUG: resources ==="
   nproc || true; free -g || true; df -h "${SRC_DIR}" /tmp || true
   echo "=== DEBUG: PATH ==="
@@ -68,16 +68,21 @@ done
 # shipped binaries are attested-from-source — the entire point of this recipe.
 # --repo_env=PATH: propagate PATH into repository rules so rules_nodejs's
 # `uname -m` probe resolves (it returned empty on PBP without it).
-# HERMETIC_PYTHON_VERSION is pinned to 3.12 for ALL variants: it only selects
-# bazel's internal interpreter + upstream's requirements_lock (shipped for
-# 3.10-3.13 only); the assembled package is python-version-independent
-# (upstream tags it py3-none) and our ${PYTHON} performs the real install.
 # macOS: upstream's `macos` bazelrc config supplies the apple platform type
 # and linker opts, but its local_config_apple_cc crosstool needs full Xcode
 # (empty toolchain on CLT-only machines). Override the crosstool to the conda
 # clang toolchain gen-bazel-toolchain generated at //bazel_toolchain
 # (tensorflow-feedstock pattern), and pin the arm64 CPU — without it,
 # resolution targets macos_x86_64.
+# HERMETIC_PYTHON_VERSION selects upstream's requirements lockfile AND (on
+# platforms without a downloadable hermetic interpreter, e.g. osx-arm64) must
+# match the host python actually running pip. Upstream ships lockfiles for
+# 3.10-3.13 only; py3.14 uses the 3.13 lockfile (its floors accept 3.14).
+case "${PY_VER}" in
+  3.14*) HERMETIC_PY=3.13 ;;
+  *)     HERMETIC_PY="${PY_VER}" ;;
+esac
+
 EXTRA_BAZEL_FLAGS=""
 if [[ "$(uname)" == "Darwin" ]]; then
   python3 - <<'PYEOF'
@@ -109,7 +114,7 @@ bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   ${EXTRA_BAZEL_FLAGS} \
   --jobs=${CPU_COUNT} \
   --repo_env=PATH \
-  --repo_env=HERMETIC_PYTHON_VERSION=3.12 \
+  --repo_env=HERMETIC_PYTHON_VERSION=${HERMETIC_PY} \
   --action_env=LD_LIBRARY_PATH \
   --host_action_env=LD_LIBRARY_PATH \
   //plugin:build_pip_package -- --output "${SRC_DIR}/pip_pkg_out"
