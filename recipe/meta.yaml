@@ -11,10 +11,10 @@ source:
   url: https://github.com/openxla/{{ name }}/archive/refs/tags/{{ name }}-v{{ version }}.tar.gz
   sha256: d57d365e71b70537f69c901c66e0f5cc4f07c7f778e4214c955c703f622d9963
   patches:
-    # rules_nodejs arch detection shells out to `uname -m` in a repository
-    # rule and gets empty stdout on PBP workers; patch the external archive
-    # to use rctx.os.arch (see patch header)
-    - patches/0001-rules-nodejs-arch-detection.patch
+    # fixes to bazel external repos for conda toolchains (see patch header):
+    # rules_nodejs arch detection via rctx.os.arch, and gRPC's protoc plugin
+    # kept single-arch on macOS
+    - patches/0001-bazel-external-repo-fixes.patch
 
 build:
   # build 1 supersedes the wheel-repack build 0 with a from-source rebuild
