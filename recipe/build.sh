@@ -26,6 +26,12 @@ source gen-bazel-toolchain
 } 1>&2
 # -------------------------------------------------------------------
 
+# conda's bazel extracts its embedded helpers (process-wrapper, linux-sandbox)
+# into the output base, where their $ORIGIN/../lib RPATH no longer resolves the
+# conda env's libprotobuf — every repository-rule subprocess then dies with
+# rc 127 / empty stdout. Make the env libs visible to those helpers.
+export LD_LIBRARY_PATH="${BUILD_PREFIX}/lib:${PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 mkdir -p "${SRC_DIR}/bazel_output_base"
 
 # Upstream's README suggests `--config=public_cache` (Google's public remote
