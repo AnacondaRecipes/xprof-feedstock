@@ -43,19 +43,25 @@ mkdir -p "${SRC_DIR}/bazel_output_base"
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" version 1>&2
 INSTALL_BASE=$(bazel --output_user_root="${SRC_DIR}/bazel_output_base" info install_base)
 { echo "=== DEBUG: install_base=$INSTALL_BASE"; ls "$INSTALL_BASE" | head -30; } 1>&2
-if [[ "$(uname)" == "Linux" ]]; then
-  for b in process-wrapper linux-sandbox build-runfiles daemonize; do
-    if [ -f "$INSTALL_BASE/$b" ]; then
+for b in process-wrapper linux-sandbox build-runfiles daemonize libcpu_profiler.dylib; do
+  if [ -f "$INSTALL_BASE/$b" ]; then
+    # bazel validates its install base by comparing the far-future mtimes it
+    # stamps at extraction; preserve and restore them or startup FATALs with
+    # "corrupt installation: file ... missing or modified"
+    touch -r "$INSTALL_BASE/$b" "${SRC_DIR}/.mtime_ref_$b"
+    if [[ "$(uname)" == "Linux" ]]; then
       { echo "=== DEBUG: $b RPATH BEFORE patch:"; readelf -d "$INSTALL_BASE/$b" | grep -E 'RPATH|RUNPATH' || true; } 1>&2
-      # bazel validates its install base by comparing the far-future mtimes it
-      # stamps at extraction; preserve and restore them or startup FATALs with
-      # "corrupt installation: file ... missing or modified"
-      touch -r "$INSTALL_BASE/$b" "${SRC_DIR}/.mtime_ref_$b"
       patchelf --set-rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "patchelf failed on $b" 1>&2
-      touch -r "${SRC_DIR}/.mtime_ref_$b" "$INSTALL_BASE/$b"
+    else
+      { echo "=== DEBUG: $b LC_RPATH BEFORE patch:"; otool -l "$INSTALL_BASE/$b" | grep -A2 LC_RPATH || true; } 1>&2
+      install_name_tool -add_rpath "${BUILD_PREFIX}/lib" "$INSTALL_BASE/$b" 1>&2 || echo "install_name_tool failed on $b" 1>&2
+      # modifying a Mach-O invalidates its signature; arm64 macOS kills
+      # unsigned binaries, so re-sign ad hoc
+      codesign -f -s - "$INSTALL_BASE/$b" 1>&2 || echo "codesign failed on $b" 1>&2
     fi
-  done
-fi
+    touch -r "${SRC_DIR}/.mtime_ref_$b" "$INSTALL_BASE/$b"
+  fi
+done
 
 # Upstream's README suggests `--config=public_cache` (Google's public remote
 # build cache). Deliberately NOT used: every action is compiled locally so the
@@ -66,10 +72,41 @@ fi
 # bazel's internal interpreter + upstream's requirements_lock (shipped for
 # 3.10-3.13 only); the assembled package is python-version-independent
 # (upstream tags it py3-none) and our ${PYTHON} performs the real install.
+# macOS: upstream's `macos` bazelrc config supplies the apple platform type
+# and linker opts, but its local_config_apple_cc crosstool needs full Xcode
+# (empty toolchain on CLT-only machines). Override the crosstool to the conda
+# clang toolchain gen-bazel-toolchain generated at //bazel_toolchain
+# (tensorflow-feedstock pattern), and pin the arm64 CPU — without it,
+# resolution targets macos_x86_64.
+EXTRA_BAZEL_FLAGS=""
+if [[ "$(uname)" == "Darwin" ]]; then
+  python3 - <<'PYEOF'
+# bazel-toolchain bakes one SDK version into the builtin-include list, but
+# clang may resolve a different installed SDK; declare the CLT SDKs parent
+# prefix (bazel treats entries as directory prefixes) so strict-header
+# validation accepts whichever SDK the compiler actually used. Insert ONLY
+# inside cxx_builtin_include_directories list literals (validation-only) —
+# the same SDK path also appears in compile-flag lists where a bare entry
+# becomes a stray compiler argument.
+list_anchor = "cxx_builtin_include_directories = ["
+sdk_line = '\n            "/Library/Developer/CommandLineTools/SDKs",'
+for cfg in ("bazel_toolchain/cc_toolchain_config.bzl",
+            "bazel_toolchain/cc_toolchain_build_config.bzl"):
+    s = open(cfg).read()
+    assert list_anchor in s, "list anchor missing in " + cfg
+    open(cfg, "w").write(s.replace(list_anchor, list_anchor + sdk_line))
+PYEOF
+  # --macos_cpus: apple rule transitions default to x86_64 regardless of --cpu.
+  # -Qunused-arguments: .S files inherit -stdlib=libc++ from the crosstool and
+  # rules that add bare -Werror (boringssl) turn the unused-arg warning fatal.
+  EXTRA_BAZEL_FLAGS="--config=macos --crosstool_top=//bazel_toolchain:toolchain --host_crosstool_top=//bazel_toolchain:toolchain --cpu=darwin_arm64 --host_cpu=darwin_arm64 --macos_cpus=arm64 --copt=-Qunused-arguments --host_copt=-Qunused-arguments"
+fi
+
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   run \
   --verbose_failures \
   --announce_rc \
+  ${EXTRA_BAZEL_FLAGS} \
   --jobs=${CPU_COUNT} \
   --repo_env=PATH \
   --repo_env=HERMETIC_PYTHON_VERSION=3.12 \
