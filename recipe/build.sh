@@ -85,6 +85,9 @@ esac
 
 EXTRA_BAZEL_FLAGS=""
 if [[ "$(uname)" == "Darwin" ]]; then
+  # upstream's build_pip_package.sh uses `gcp` (GNU cp) on Darwin; conda's
+  # coreutils ships GNU cp unprefixed, so provide the expected name
+  ln -sf "${BUILD_PREFIX}/bin/cp" "${BUILD_PREFIX}/bin/gcp"
   python3 - <<'PYEOF'
 # bazel-toolchain bakes one SDK version into the builtin-include list, but
 # clang may resolve a different installed SDK; declare the CLT SDKs parent
