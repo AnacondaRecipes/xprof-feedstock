@@ -31,6 +31,8 @@ requirements:
     - bazel 7.*
     # provides gen-bazel-toolchain (conda-compiler crosstool for bazel)
     - bazel-toolchain >=0.2.0b1
+    # uname/cp used by rules_nodejs arch detection and plugin/build_pip_package.sh
+    - coreutils
   host:
     - python
     - pip
