@@ -79,8 +79,8 @@ done
 # match the host python actually running pip. Upstream ships lockfiles for
 # 3.10-3.13 only; py3.14 uses the 3.13 lockfile (its floors accept 3.14).
 case "${PY_VER}" in
-  3.14*) HERMETIC_PY=3.13 ;;
-  *)     HERMETIC_PY="${PY_VER}" ;;
+  3.10|3.11|3.12|3.13) HERMETIC_PY="${PY_VER}" ;;
+  *)                   HERMETIC_PY=3.13 ;;  # newest upstream lockfile
 esac
 
 EXTRA_BAZEL_FLAGS=""

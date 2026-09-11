@@ -23,7 +23,7 @@ build:
   # requires-python >=3.10; matrix floor is 3.10). No osx-64 (upstream dropped
   # it); win-64 deferred (bazel-on-Windows build-out; stakeholders informed) —
   # PKG-17979.
-  skip: true  # [not linux64 and not (osx and arm64)]
+  skip: true  # [py<310 or (not linux64 and not (osx and arm64))]
   entry_points:
     - xprof = xprof.cli.xprof_cli:main
 
@@ -38,7 +38,7 @@ requirements:
     # uname/cp used by rules_nodejs arch detection and plugin/build_pip_package.sh
     - coreutils
     # repair RPATH of bazel's extracted helper binaries (see build.sh)
-    - patchelf
+    - patchelf  # [linux]
   host:
     - python
     - pip
