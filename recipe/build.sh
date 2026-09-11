@@ -45,7 +45,7 @@ bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
 # DEBUG (bring-up only): show what the build produced before pip install
 { echo "=== DEBUG: pip_pkg_out contents ==="; find "${SRC_DIR}/pip_pkg_out" -maxdepth 3 | head -60; } 1>&2
 
-# build_pip_package assembles a pip-installable tree (setup.py, python sources,
+# build_pip_package assembles the package tree (setup.py, python sources,
 # locally-built profiler_plugin_c_api.so, frontend bundle + trace-viewer wasm)
 cd "${SRC_DIR}/pip_pkg_out"
 ${PYTHON} -m pip install . -vv --no-deps --no-build-isolation
