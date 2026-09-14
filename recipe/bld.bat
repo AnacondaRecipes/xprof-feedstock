@@ -1,6 +1,19 @@
 @echo on
 setlocal enabledelayedexpansion
 
+REM ---- Fail fast if the worker lacks disk for the XLA source build ----
+REM The bazel tree + npm + emsdk need tens of GB; some win workers start with
+REM only ~5 GB free. Enumerate volumes (so we can see a roomier drive) and
+REM bail in seconds rather than dying an hour into the compile. Rerun the task
+REM to land on a worker with enough space.
+powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{n='FreeGB';e={[math]::Floor($_.Free/1GB)}},@{n='UsedGB';e={[math]::Floor($_.Used/1GB)}} | Format-Table -AutoSize"
+for /f %%F in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive C).Free/1GB)"') do set "FREEGB=%%F"
+echo Free on C: %FREEGB% GB
+if %FREEGB% LSS 25 (
+  echo ERROR: insufficient disk for the XLA source build ^(need ~25 GB, have %FREEGB% GB^). Rerun to land on a roomier worker.
+  exit 1
+)
+
 REM WIN-64 FROM-SOURCE SPIKE (PKG-18061). First attempt; expect iteration.
 REM Modeled on jaxlib-feedstock (same XLA/Bazel-on-Windows problem): drive
 REM bazel with conda clang-cl + the worker VS STL, since xprof's clang-cl
