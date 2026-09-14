@@ -19,11 +19,11 @@ source:
 build:
   # build 1 supersedes the wheel-repack build 0 with a from-source rebuild
   number: 1
-  # FROM-SOURCE SCOPE: linux-64 + osx-arm64, all pythons (upstream
-  # requires-python >=3.10; matrix floor is 3.10). No osx-64 (upstream dropped
-  # it); win-64 deferred (bazel-on-Windows build-out; stakeholders informed) —
-  # PKG-17979.
-  skip: true  # [py<310 or (not linux64 and not (osx and arm64))]
+  # WIN-64 FROM-SOURCE SPIKE (PKG-18061): this branch builds win-64 ONLY —
+  # linux-64/osx-arm64 are temporarily skipped here to keep CI light while the
+  # bazel-on-Windows build is brought up. The full linux+osx matrix lives in the
+  # from-source PR (PKG-17979); fold win-64 back into that skip line before merge.
+  skip: true  # [py<310 or not win64]
   # conda-build's post-build byte-compile runs under the build-env python (3.14)
   # and would add foreign-version .pyc; skip it so only pip's variant-python
   # bytecode ships
@@ -38,12 +38,23 @@ requirements:
     - {{ compiler('cxx') }}
     - {{ stdlib('c') }}
     - bazel 7.*
-    # provides gen-bazel-toolchain (conda-compiler crosstool for bazel)
-    - bazel-toolchain >=0.2.0b1
-    # uname/cp used by rules_nodejs arch detection and plugin/build_pip_package.sh
-    - coreutils
+    # provides gen-bazel-toolchain (conda-compiler crosstool for bazel) — linux/osx
+    # only; no win-64 build exists, so on Windows we drive upstream's own
+    # --config=windows clang toolchain instead (see bld.bat)
+    - bazel-toolchain >=0.2.0b1  # [not win]
+    # uname/cp used by rules_nodejs arch detection and plugin/build_pip_package.sh;
+    # on Windows the same tools come from m2-coreutils under bazel's MSYS bash
+    - coreutils  # [not win]
+    # bazel on Windows shells out to bash for def-file/genrule actions; point
+    # BAZEL_SH at msys2-bash in bld.bat (jaxlib-feedstock pattern)
+    - msys2-bash        # [win]
+    - msys2-coreutils   # [win]
+    - msys2-sed         # [win]
     # repair RPATH of bazel's extracted helper binaries (see build.sh)
     - patchelf  # [linux]
+    # xprof's build:windows config compiles with clang-cl, not cl.exe; supply
+    # conda clang and point BAZEL_LLVM/CLANG_COMPILER_PATH at it in bld.bat
+    - clangdev  # [win]
   host:
     - python
     - pip
