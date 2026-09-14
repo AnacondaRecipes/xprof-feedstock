@@ -24,6 +24,11 @@ build:
   # it); win-64 deferred (bazel-on-Windows build-out; stakeholders informed) —
   # PKG-17979.
   skip: true  # [py<310 or (not linux64 and not (osx and arm64))]
+  # conda-build's post-build byte-compile runs under the build-env python (3.14)
+  # and would add foreign-version .pyc; skip it so only pip's variant-python
+  # bytecode ships
+  skip_compile_pyc:
+    - "**/*.py"
   entry_points:
     - xprof = xprof.cli.xprof_cli:main
 
