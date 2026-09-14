@@ -21,11 +21,12 @@ REM Upstream requirements lockfiles exist for 3.10-3.13 only; py3.14 uses 3.13.
 REM yarn postinstall runs `python3 patch_keys.py`; Windows conda ships
 REM python.exe, not python3.exe. Copy python.exe -> python3.exe into every
 REM dir that may be on the effective PATH (host env, build env, and the
-REM msys2 /usr/bin used by bazel BAZEL_SH bash).
-for %%D in ("%PREFIX%" "%BUILD_PREFIX%" "%BUILD_PREFIX%\Library\usr\bin") do (
+REM host env, next to its stdlib).
+REM Only beside the real python (+ its stdlib): a python3.exe copy placed in
+REM msys /usr/bin cannot find its stdlib ("No module named encodings").
+for %%D in ("%PREFIX%" "%BUILD_PREFIX%") do (
   if exist "%%~D\python.exe" copy /Y "%%~D\python.exe" "%%~D\python3.exe" >nul
 )
-if not exist "%BUILD_PREFIX%\Library\usr\bin\python3.exe" if exist "%PREFIX%\python.exe" copy /Y "%PREFIX%\python.exe" "%BUILD_PREFIX%\Library\usr\bin\python3.exe" >nul
 
 set "HERMETIC_PY=%PY_VER%"
 if "%PY_VER%"=="3.14" set "HERMETIC_PY=3.13"
