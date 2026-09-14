@@ -25,6 +25,38 @@ copy /Y "%BUILD_PREFIX%\python.exe" "%BUILD_PREFIX%\python3.exe" >nul
 set "HERMETIC_PY=%PY_VER%"
 if "%PY_VER%"=="3.14" set "HERMETIC_PY=3.13"
 
+REM ---------- DEBUG (spike bring-up; remove before release) ----------
+echo === DEBUG: host / tools ===
+ver
+echo where python / python3 / bash / clang / clang-cl / bazel / node / yarn:
+where python 2>&1
+where python3 2>&1
+where bash 2>&1
+where clang 2>&1
+where clang-cl 2>&1
+where bazel 2>&1
+where node 2>&1
+where yarn 2>&1
+python --version 2>&1
+"%BAZEL_SH%" -c "uname -a; which python3 bash node yarn" 2>&1
+echo === DEBUG: env ===
+echo BUILD_PREFIX=%BUILD_PREFIX%
+echo PREFIX=%PREFIX%
+echo SRC_DIR=%SRC_DIR%
+echo PY_VER=%PY_VER%  CPU_COUNT=%CPU_COUNT%  HERMETIC_PY=%HERMETIC_PY%
+echo VSINSTALLDIR=%VSINSTALLDIR%
+echo BAZEL_VS=%BAZEL_VS%
+echo BAZEL_VC=%BAZEL_VC%
+echo BAZEL_LLVM=%BAZEL_LLVM%
+echo CLANG_COMPILER_PATH=%CLANG_COMPILER_PATH%
+echo BAZEL_SH=%BAZEL_SH%
+echo === DEBUG: PATH ===
+echo %PATH%
+echo === DEBUG: free space on C: ===
+dir C:\ | findstr /C:"bytes free"
+echo === DEBUG END ===
+REM ------------------------------------------------------------------
+
 bazel --output_user_root=%BZLROOT% run ^
   --verbose_failures ^
   --config=windows ^
