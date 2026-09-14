@@ -9,8 +9,10 @@ if exist C:\bzlroot rmdir /s /q C:\bzlroot 2>nul
 REM conda package cache / unused tarballs (re-downloaded on demand)
 call conda clean --all --yes 2>nul
 REM user + system temp
-del /q /s "%TEMP%\*" 2>nul
-if exist "C:\Windows\Temp" del /q /s "C:\Windows\Temp\*" 2>nul
+REM temp: delete only files older than today so the CURRENT builds
+REM conda_build.bat / work files are never removed (they are todays files)
+forfiles /P "%TEMP%" /D -1 /C "cmd /c if @isdir==FALSE del /q @path" 2>nul
+if exist "C:\Windows\Temp" forfiles /P "C:\Windows\Temp" /D -1 /C "cmd /c if @isdir==FALSE del /q @path" 2>nul
 for /f %%F in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive C).Free/1GB)"') do set "POST=%%F"
 echo Free after cleanup: %POST% GB
 
@@ -98,6 +100,8 @@ REM below is the MSVC spelling (clang-cl accepts it too) for absl C++17.
 bazel --output_user_root=%BZLROOT% run ^
   --verbose_failures ^
   --config=windows ^
+  --copt=-DZSTD_DISABLE_ASM=1 ^
+  --host_copt=-DZSTD_DISABLE_ASM=1 ^
   --cxxopt=/std:c++17 ^
   --host_cxxopt=/std:c++17 ^
   --compiler=clang-cl ^
