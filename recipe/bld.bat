@@ -1,6 +1,19 @@
 @echo on
 setlocal enabledelayedexpansion
 
+REM ---- Reclaim disk first (workers persist; prior runs leave GBs) ----
+for /f %%F in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive C).Free/1GB)"') do set "PRE=%%F"
+echo Free before cleanup: %PRE% GB
+REM stale bazel output from earlier runs (we use a fixed output_user_root)
+if exist C:\bzlroot rmdir /s /q C:\bzlroot 2>nul
+REM conda package cache / unused tarballs (re-downloaded on demand)
+call conda clean --all --yes 2>nul
+REM user + system temp
+del /q /s "%TEMP%\*" 2>nul
+if exist "C:\Windows\Temp" del /q /s "C:\Windows\Temp\*" 2>nul
+for /f %%F in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive C).Free/1GB)"') do set "POST=%%F"
+echo Free after cleanup: %POST% GB
+
 REM ---- Fail fast if the worker lacks disk for the XLA source build ----
 REM The bazel tree + npm + emsdk need tens of GB; some win workers start with
 REM only ~5 GB free. Enumerate volumes (so we can see a roomier drive) and
