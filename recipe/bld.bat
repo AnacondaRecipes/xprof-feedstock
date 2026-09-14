@@ -63,11 +63,11 @@ dir C:\ | findstr /C:"bytes free"
 echo === DEBUG END ===
 REM ------------------------------------------------------------------
 
+REM cl.exe ignores the base .bazelrc clang-style -std=c++17; the /std:c++17
+REM below is the MSVC spelling (clang-cl accepts it too) for absl C++17.
 bazel --output_user_root=%BZLROOT% run ^
   --verbose_failures ^
   --config=windows ^
-REM cl.exe ignores the base .bazelrcs clang-style -std=c++17; give it the
-REM MSVC spelling (accepted by clang-cl too) so absls C++17 check passes.
   --cxxopt=/std:c++17 ^
   --host_cxxopt=/std:c++17 ^
   --compiler=clang-cl ^
