@@ -66,6 +66,10 @@ REM ------------------------------------------------------------------
 bazel --output_user_root=%BZLROOT% run ^
   --verbose_failures ^
   --config=windows ^
+REM cl.exe ignores the base .bazelrcs clang-style -std=c++17; give it the
+REM MSVC spelling (accepted by clang-cl too) so absls C++17 check passes.
+  --cxxopt=/std:c++17 ^
+  --host_cxxopt=/std:c++17 ^
   --compiler=clang-cl ^
   --action_env=CLANG_COMPILER_PATH="%CLANG_COMPILER_PATH%" ^
   --repo_env=CC="%CLANG_COMPILER_PATH%" ^
