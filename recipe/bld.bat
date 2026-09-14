@@ -19,8 +19,13 @@ set "BAZEL_SH=%BUILD_PREFIX:\=/%/Library/usr/bin/bash.exe"
 
 REM Upstream requirements lockfiles exist for 3.10-3.13 only; py3.14 uses 3.13.
 REM yarn postinstall runs `python3 patch_keys.py`; Windows conda ships
-REM python.exe, not python3.exe -- provide a shim on PATH for the frontend.
-copy /Y "%BUILD_PREFIX%\python.exe" "%BUILD_PREFIX%\python3.exe" >nul
+REM python.exe, not python3.exe. Copy python.exe -> python3.exe into every
+REM dir that may be on the effective PATH (host env, build env, and the
+REM msys2 /usr/bin used by bazel BAZEL_SH bash).
+for %%D in ("%PREFIX%" "%BUILD_PREFIX%" "%BUILD_PREFIX%\Library\usr\bin") do (
+  if exist "%%~D\python.exe" copy /Y "%%~D\python.exe" "%%~D\python3.exe" >nul
+)
+if not exist "%BUILD_PREFIX%\Library\usr\bin\python3.exe" if exist "%PREFIX%\python.exe" copy /Y "%PREFIX%\python.exe" "%BUILD_PREFIX%\Library\usr\bin\python3.exe" >nul
 
 set "HERMETIC_PY=%PY_VER%"
 if "%PY_VER%"=="3.14" set "HERMETIC_PY=3.13"
