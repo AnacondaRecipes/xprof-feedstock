@@ -64,9 +64,14 @@ fi
 # deliberately NOT used: every action is compiled locally so the shipped
 # binaries are attested-from-source. --repo_env=PATH lets repository-rule
 # subprocesses (uname, node, python) resolve tools.
+# -c opt --strip=always: bazel defaults to fastbuild (unoptimized, unstripped);
+# ship an optimized, stripped native library like upstream's own wheels
+# (fastbuild made profiler_plugin_c_api.so ~220 MB and slower on the hot path)
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   run \
   --verbose_failures \
+  -c opt \
+  --strip=always \
   ${EXTRA_BAZEL_FLAGS} \
   --jobs=${CPU_COUNT} \
   --repo_env=PATH \
@@ -78,6 +83,9 @@ bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
 # assembled tree: setup.py, python sources, locally built native library,
 # frontend bundle + trace-viewer wasm
 cd "${SRC_DIR}/pip_pkg_out"
+# drop __pycache__ from the build env's python (3.14) so the artifact carries
+# only the variant-python bytecode pip compiles below
+find . -name __pycache__ -type d -prune -exec rm -rf {} +
 ${PYTHON} -m pip install . -vv --no-deps --no-build-isolation
 
 bazel shutdown || true
