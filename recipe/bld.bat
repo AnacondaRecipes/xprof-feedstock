@@ -14,6 +14,10 @@ set "BAZEL_VS=%VSINSTALLDIR%"
 set "BAZEL_VC=%VSINSTALLDIR%\VC"
 set "BAZEL_LLVM=%BUILD_PREFIX:\=/%/Library/"
 set "CLANG_COMPILER_PATH=%BUILD_PREFIX:\=/%/Library/bin/clang.exe"
+REM Force bazels Windows cc autoconf to use clang-cl (conda clangdev) rather
+REM than cl.exe: XLA is validated with clang-cl and cl.exe fails per-TU
+REM (e.g. sycl C2370). BAZEL_LLVM above points the toolchain at conda clang.
+set "USE_CLANG_CL=1"
 REM bazel's def-file/genrule actions shell out to bash (msys2-bash).
 set "BAZEL_SH=%BUILD_PREFIX:\=/%/Library/usr/bin/bash.exe"
 
