@@ -54,7 +54,7 @@ requirements:
     - patchelf  # [linux]
     # xprof's build:windows config compiles with clang-cl, not cl.exe; supply
     # conda clang and point BAZEL_LLVM/CLANG_COMPILER_PATH at it in bld.bat
-    - clangdev  # [win]
+    - clangdev 22.*  # [win]
   host:
     - python
     - pip
