@@ -11,7 +11,6 @@ http_archive's native `patches` attribute (no subprocesses involved):
    on macOS — the upstream universal_binary wrapper splits the build
    into darwin_x86_64 + darwin_arm64, which a single-target conda
    toolchain cannot satisfy. Packaging-only; not upstreamable as-is.
-Co-authored-by: Claude (AI assistant)
 diff --git a/WORKSPACE b/WORKSPACE
 index 2bac6ae..5fad5e5 100644
 --- a/WORKSPACE
