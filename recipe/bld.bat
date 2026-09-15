@@ -5,24 +5,10 @@ REM ===================================================================
 REM win-64 from-source build (PKG-18061). XLA/Bazel-on-Windows toolchain:
 REM conda clang-cl + VS2022 STL. Validated from source on a dev instance
 REM (peak disk ~36 GB, ~90 min) -> xprof-2.23.1-py312hd7fb8db_1.conda,
-REM imports + CLI OK. This spike branch builds win-64 on CI to probe whether
-REM any worker has enough disk; the release recipe (with win skipped) is #2.
+REM imports + CLI OK. win-64 is currently SKIPPED in meta.yaml (the build
+REM needs more disk than the shared CI win-64 workers provide); drop win
+REM from the skip selector to build it on a provisioned worker.
 REM ===================================================================
-
-REM ---- Reclaim disk (PBP win workers persist between tasks) ----
-if exist C:\bzlroot rmdir /s /q C:\bzlroot 2>nul
-call conda clean --all --yes 2>nul
-
-REM ---- Fail fast if this worker lacks disk (the XLA tree needs ~36 GB) ----
-REM Enumerate all volumes (a roomier secondary drive would show here) and bail
-REM in seconds rather than an hour into the compile. Rerun to re-roll workers.
-powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{n='FreeGB';e={[math]::Floor($_.Free/1GB)}},@{n='UsedGB';e={[math]::Floor($_.Used/1GB)}} | Format-Table -AutoSize"
-for /f %%F in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive C).Free/1GB)"') do set "FREEGB=%%F"
-echo Free on C: %FREEGB% GB
-if %FREEGB% LSS 38 (
-  echo ERROR: insufficient disk for the XLA source build ^(need ~36 GB, have %FREEGB% GB^). Rerun to land on a roomier worker.
-  exit 1
-)
 
 REM VS provides the MSVC STL/headers; conda clangdev provides clang-cl.
 set "BAZEL_VS=%VSINSTALLDIR%"
@@ -36,6 +22,7 @@ REM bazel shells out to bash for def-file/genrule actions (jaxlib pattern).
 set "BAZEL_SH=%BUILD_PREFIX:\=/%/Library/usr/bin/bash.exe"
 
 REM yarn frontend postinstall calls `python3`; conda ships python.exe only.
+REM Copy python.exe -> python3.exe beside the real interpreter (its stdlib).
 for %%D in ("%PREFIX%" "%BUILD_PREFIX%") do (
   if exist "%%~D\python.exe" copy /Y "%%~D\python.exe" "%%~D\python3.exe" >nul
 )
@@ -45,6 +32,9 @@ if "%PY_VER%"=="3.14" set "HERMETIC_PY=3.13"
 
 REM Short output root: bazel on Windows hits MAX_PATH (260) with deep trees.
 set "BZLROOT=C:/bzlroot"
+REM Cross-build bazel caches (this build is heavy; keeps re-runs incremental).
+set "DCACHE=C:/bd"
+set "RCACHE=C:/br"
 
 REM build_pip_package.sh (MSYS branch) does dest="/c$OUTPUT_DIR": it wants a
 REM drive-less forward-slash path. Convert %SRC_DIR% (C:\...\work) accordingly.
@@ -54,7 +44,7 @@ set "PIPOUT_MSYS=%SRC_FWD:~2%/pip_pkg_out"
 REM ---- Materialize external repos so we can patch them before compiling ----
 REM net_zstd / emsdk come from bazel http_archives, not the xprof source tree,
 REM so a recipe patch can't reach them; patch them post-fetch, pre-compile.
-bazel --output_user_root=%BZLROOT% fetch //plugin:build_pip_package
+bazel --output_user_root=%BZLROOT% fetch --repository_cache=%RCACHE% //plugin:build_pip_package
 if errorlevel 1 exit 1
 
 for /f "usebackq delims=" %%B in (`bazel --output_user_root=%BZLROOT% info output_base`) do set "OBASE=%%B"
@@ -72,10 +62,14 @@ powershell -NoProfile -Command "$py=$env:PYTHON; $d='%OBASE%/external/emsdk/emsc
 
 REM C++17 for clang-cl via the _CL_ env var (read only by MSVC-family compilers;
 REM emscripten's clang ignores it, so /std:c++17 never leaks into the WASM
-REM cross-compile toolchain). Mirrors upstream .bazelrc's ci_windows_amd64.
+REM cross-compile toolchain). Mirrors upstream .bazelrc's ci_windows_amd64
+REM config. The base .bazelrc already sets clang-style -std=c++17 for every
+REM compile (which emcc needs and clang-cl harmlessly ignores).
 bazel --output_user_root=%BZLROOT% run ^
   --verbose_failures ^
   --config=windows ^
+  --disk_cache=%DCACHE% ^
+  --repository_cache=%RCACHE% ^
   --action_env=_CL_="/std:c++17 /Zc:__cplusplus" ^
   --host_action_env=_CL_="/std:c++17 /Zc:__cplusplus" ^
   --compiler=clang-cl ^
