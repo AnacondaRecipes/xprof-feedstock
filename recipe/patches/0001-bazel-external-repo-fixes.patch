@@ -1,0 +1,96 @@
+From: Xianglong Kong <xkong@anaconda.com>
+Subject: Fix bazel external repos for conda toolchains (packaging patch)
+
+Two packaging fixes to bazel external repositories, applied via
+http_archive's native `patches` attribute (no subprocesses involved):
+1. rules_nodejs 5.8.5: arch detection shells out to `uname -m` in a
+   repository rule and gets empty stdout on PBP workers; use Bazel's
+   built-in rctx.os.arch instead (normalized to uname spellings).
+2. gRPC (pre-declared with XLA's exact archive + patch; first
+   definition wins): keep grpc_proto_plugin a single-arch native tool
+   on macOS — the upstream universal_binary wrapper splits the build
+   into darwin_x86_64 + darwin_arm64, which a single-target conda
+   toolchain cannot satisfy. Packaging-only; not upstreamable as-is.
+diff --git a/WORKSPACE b/WORKSPACE
+index 2bac6ae..5fad5e5 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -5,6 +5,23 @@ load("//:config.bzl", "repository_configuration")
+ 
+ repository_configuration(name = "repository_configuration")
+ 
++# Anaconda: pre-declare gRPC (first definition wins; XLA's tf_http_archive
++# skips already-defined repos) to add a patch that keeps grpc's protoc plugin
++# a single-arch native tool on macOS — the upstream universal_binary wrapper
++# splits the build into darwin_x86_64 + darwin_arm64, which a single-target
++# conda toolchain cannot satisfy. Same archive + patch XLA itself uses.
++http_archive(
++    name = "com_github_grpc_grpc",
++    sha256 = "41b695614b26652ff9e97ce50cfd4a6c7a3d45a9fe598d1454407746499bbf2c",
++    strip_prefix = "grpc-1.81.0",
++    urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.81.0.tar.gz"],
++    patches = [
++        "@xla//third_party/grpc:grpc.patch",
++        "//third_party:grpc_no_universal.patch",
++    ],
++    patch_args = ["-p1"],
++)
++
+ load("@repository_configuration//:repository_config.bzl", "HERMETIC_PYTHON_VERSION", "PROFILER_REQUIREMENTS_FILE")
+ 
+ print("Using Python Version = {}".format(HERMETIC_PYTHON_VERSION))
+@@ -273,6 +290,8 @@ http_archive(
+     name = "rules_nodejs",
+     sha256 = "0c2277164b1752bb71ecfba3107f01c6a8fb02e4835a790914c71dfadcf646ba",
+     urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/5.8.5/rules_nodejs-core-5.8.5.tar.gz"],
++    patches = ["//third_party:rules_nodejs_os_name.patch"],
++    patch_args = ["-p1"],
+ )
+ 
+ load("@rules_nodejs//nodejs:repositories.bzl", "nodejs_register_toolchains")
+diff --git a/third_party/grpc_no_universal.patch b/third_party/grpc_no_universal.patch
+new file mode 100644
+index 0000000..0eee515
+--- /dev/null
++++ b/third_party/grpc_no_universal.patch
+@@ -0,0 +1,16 @@
++--- a/bazel/grpc_build_system.bzl	2026-09-11 13:25:10.632320495 -0500
+++++ b/bazel/grpc_build_system.bzl	2026-09-11 13:25:10.664596725 -0500
++@@ -211,10 +211,9 @@
++     # In order to avoid warnings from Bazel, names of the rule and its output file must differ.
++     native.genrule(
++         name = name,
++-        srcs = select({
++-            "@platforms//os:macos": [name + "_universal"],
++-            "//conditions:default": [name + "_native"],
++-        }),
+++        # Anaconda: build-machine tool; single-arch native suffices and the
+++        # universal split breaks single-target conda toolchains.
+++        srcs = [name + "_native"],
++         outs = [name + "_binary"],
++         cmd = "cp $< $@",
++         executable = True,
+diff --git a/third_party/rules_nodejs_os_name.patch b/third_party/rules_nodejs_os_name.patch
+new file mode 100644
+index 0000000..5547e77
+--- /dev/null
++++ b/third_party/rules_nodejs_os_name.patch
+@@ -0,0 +1,18 @@
++--- a/nodejs/private/os_name.bzl	2026-09-11 10:59:13.449503774 -0500
+++++ b/nodejs/private/os_name.bzl	2026-09-11 12:43:20.884478610 -0500
++@@ -43,8 +43,13 @@
++     if os_name.find("windows") != -1:
++         return OS_NAMES[0]
++ 
++-    # This is not ideal, but bazel doesn't directly expose arch.
++-    arch = rctx.execute(["uname", "-m"]).stdout.strip()
+++    # Anaconda: rctx.execute(["uname","-m"]) returns empty on PBP CI workers;
+++    # use the JVM-reported arch, normalized to uname spelling.
+++    arch = rctx.os.arch
+++    arch = "x86_64" if arch == "amd64" else arch
+++    # JVM reports Apple Silicon as "aarch64"; this file expects "arm64" on mac
+++    if os_name.startswith("mac os") and arch == "aarch64":
+++        arch = "arm64"
++     if os_name.startswith("mac os"):
++         if arch == "x86_64":
++             return OS_NAMES[1]
