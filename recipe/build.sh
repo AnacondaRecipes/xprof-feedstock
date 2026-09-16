@@ -69,12 +69,27 @@ fi
 # hot path). Stripping is done explicitly below — bazel --strip=always does
 # not strip cc_shared_library outputs (it writes a separate .stripped copy that
 # build_pip_package.sh does not use).
+# Memory-aware job cap: the XLA/MLIR/LLVM compile has multi-GB translation units;
+# running CPU_COUNT of them concurrently exhausts RAM on memory-constrained workers
+# (linux-aarch64 CI tasks are killed by the >90%-RAM watchdog). Cap at ~1 job per
+# 4 GB RAM; a no-op on RAM-rich linux-64/osx workers where jobs stays CPU_COUNT.
+if [[ "$(uname)" == "Darwin" ]]; then
+  RAM_GB=$(( $(sysctl -n hw.memsize) / 1073741824 ))
+else
+  RAM_GB=$(awk '/MemTotal/{print int($2/1048576)}' /proc/meminfo)
+fi
+JOBS=${CPU_COUNT}
+RAM_JOBS=$(( RAM_GB / 4 ))
+[ "${RAM_JOBS}" -lt 1 ] && RAM_JOBS=1
+[ "${RAM_JOBS}" -lt "${JOBS}" ] && JOBS=${RAM_JOBS}
+echo "Build parallelism: CPU_COUNT=${CPU_COUNT} RAM_GB=${RAM_GB} -> jobs=${JOBS}"
+
 bazel --output_user_root="${SRC_DIR}/bazel_output_base" \
   run \
   --verbose_failures \
   -c opt \
   ${EXTRA_BAZEL_FLAGS} \
-  --jobs=${CPU_COUNT} \
+  --jobs=${JOBS} \
   --repo_env=PATH \
   --repo_env=HERMETIC_PYTHON_VERSION=${HERMETIC_PY} \
   --action_env=LD_LIBRARY_PATH \
