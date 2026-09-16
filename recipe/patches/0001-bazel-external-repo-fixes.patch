@@ -1,8 +1,7 @@
 From: Xianglong Kong <xkong@anaconda.com>
-Subject: Fix bazel external repos for conda toolchains (packaging patch)
+Subject: Recipe build fixes for conda toolchains (bazel external repos + aarch64 name lookup)
 
-Two packaging fixes to bazel external repositories, applied via
-http_archive's native `patches` attribute (no subprocesses involved):
+Packaging/build fixes applied to the xprof source at build time:
 1. rules_nodejs 5.8.5: arch detection shells out to `uname -m` in a
    repository rule and gets empty stdout on PBP workers; use Bazel's
    built-in rctx.os.arch instead (normalized to uname spellings).
@@ -11,6 +10,11 @@ http_archive's native `patches` attribute (no subprocesses involved):
    on macOS — the upstream universal_binary wrapper splits the build
    into darwin_x86_64 + darwin_arm64, which a single-target conda
    toolchain cannot satisfy. Packaging-only; not upstreamable as-is.
+3. streaming_trace_viewer_processor.cc: add the missing
+   `using ::tensorflow::profiler::TraceEventsToJson;`. The call at line 379
+   uses that name as an unqualified template-id; the aarch64 conda GCC
+   rejects it in C++17 (ADL cannot find a template-id before the `<` is
+   parsed) while x86_64/osx resolved it laxly. No-op where it compiled.
 diff --git a/WORKSPACE b/WORKSPACE
 index 2bac6ae..5fad5e5 100644
 --- a/WORKSPACE
@@ -94,3 +98,14 @@ index 0000000..5547e77
 +     if os_name.startswith("mac os"):
 +         if arch == "x86_64":
 +             return OS_NAMES[1]
+diff --git a/xprof/convert/streaming_trace_viewer_processor.cc b/xprof/convert/streaming_trace_viewer_processor.cc
+--- a/xprof/convert/streaming_trace_viewer_processor.cc
++++ b/xprof/convert/streaming_trace_viewer_processor.cc
+@@ -49,6 +49,7 @@
+ using ::tensorflow::profiler::TraceDeviceType;
+ using ::tensorflow::profiler::TraceEventsContainer;
+ using ::tensorflow::profiler::TraceEventsLevelDbFilePaths;
++using ::tensorflow::profiler::TraceEventsToJson;
+ using ::tensorflow::profiler::TraceOptionsFromToolOptions;
+ using ::tensorflow::profiler::TraceViewOption;
+ using ::tensorflow::profiler::XprofThreadPoolExecutor;

@@ -19,14 +19,16 @@ source:
 build:
   # build 1 supersedes the wheel-repack build 0 with a from-source rebuild
   number: 1
-  # FROM-SOURCE SCOPE (PKG-17979): builds linux-64 + osx-arm64, all pythons
-  # (upstream requires-python >=3.10). No osx-64 (upstream dropped it). The
-  # win-64 recipe (bld.bat + win-gated build deps below) is present and was
-  # validated from source on a dev instance, but stays OUT of the build matrix
-  # here: the XLA/bazel build peaks at ~36 GB disk, more than the shared CI
-  # win-64 workers provide. Drop win from the selector to build it on a
-  # provisioned worker (PKG-18061).
-  skip: true  # [py<310 or (not linux64 and not (osx and arm64))]
+  # FROM-SOURCE SCOPE (PKG-17979): builds linux-64 + linux-aarch64 + osx-arm64,
+  # all pythons (upstream requires-python >=3.10). No osx-64 (upstream dropped
+  # it). linux-aarch64 needs the patch's item 3 (a stricter conda gcc rejects an
+  # unqualified template-id x86_64/osx compiled through). The win-64 recipe
+  # (bld.bat + win-gated build deps below) is present and was validated from
+  # source on a dev instance, but stays OUT of the build matrix here: the
+  # XLA/bazel build peaks at ~36 GB disk, more than the shared CI win-64 workers
+  # provide. Drop win from the selector to build it on a provisioned worker
+  # (PKG-18061).
+  skip: true  # [py<310 or (not linux64 and not (osx and arm64) and not aarch64)]
   # conda-build's post-build byte-compile runs under the build-env python (3.14)
   # and would add foreign-version .pyc; skip it so only pip's variant-python
   # bytecode ships
