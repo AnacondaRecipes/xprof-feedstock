@@ -1,0 +1,6 @@
+# From-source bazel build: fetches and compiles the XLA C++ dependency tree,
+# the npm/Angular frontend and the Emscripten trace viewer. The 2h default
+# task timeout is insufficient for a cold build.
+# NOTE: graph reruns have historically not honored task_timeout — after a
+# rerun, confirm the task is not back on the 2h default.
+task_timeout: 21600
